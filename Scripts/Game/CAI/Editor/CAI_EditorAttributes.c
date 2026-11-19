@@ -87,6 +87,16 @@ class CAI_EditorAttributeHelper
 		manager.SetAttributeEnabled(CAI_AutoFireRangeEditorAttribute, modOn);
 		manager.SetAttributeEnabled(CAI_RifleBurstEditorAttribute, modOn);
 		manager.SetAttributeEnabled(CAI_MachineGunBurstEditorAttribute, modOn);
+		manager.SetAttributeEnabled(CAI_PresetEditorAttribute, modOn);
+		manager.SetAttributeEnabled(CAI_BreakCasualtiesEditorAttribute, modOn);
+		manager.SetAttributeEnabled(CAI_FallbackDistanceEditorAttribute, modOn);
+		manager.SetAttributeEnabled(CAI_StaticWeaponsEditorAttribute, modOn);
+		manager.SetAttributeEnabled(CAI_StaticWeaponRadiusEditorAttribute, modOn);
+		manager.SetAttributeEnabled(CAI_GrenadesUnderFireEditorAttribute, modOn);
+		manager.SetAttributeEnabled(CAI_SmokeBeforeChargeEditorAttribute, modOn);
+		manager.SetAttributeEnabled(CAI_DismountEditorAttribute, modOn);
+		manager.SetAttributeEnabled(CAI_DismountDistanceEditorAttribute, modOn);
+		manager.SetAttributeEnabled(CAI_VehicleRetreatDamageEditorAttribute, modOn);
 		manager.SetAttributeEnabled(CAI_HuntRadiusEditorAttribute, huntOn);
 	}
 
@@ -444,4 +454,102 @@ class CAI_RifleBurstEditorAttribute : CAI_BaseSliderEditorAttribute
 class CAI_MachineGunBurstEditorAttribute : CAI_BaseSliderEditorAttribute
 {
 	override protected ECAI_Setting GetSetting() { return ECAI_Setting.MG_BURST; }
+}
+
+//------------------------------------------------------------------------------------------------
+//! Dropdown of skill presets. The entries and their ECAI_Preset values are defined in Edit.conf.
+//! It is listed before the sliders there, so a slider changed in the same dialog is written after the preset.
+[BaseContainerProps(), SCR_BaseEditorAttributeCustomTitle()]
+class CAI_PresetEditorAttribute : SCR_BaseFloatValueHolderEditorAttribute
+{
+	//------------------------------------------------------------------------------------------------
+	override bool IsSerializable()
+	{
+		return false;
+	}
+
+	//------------------------------------------------------------------------------------------------
+	override SCR_BaseEditorAttributeVar ReadVariable(Managed item, SCR_AttributesManagerEditorComponent manager)
+	{
+		CAI_Settings settings = CAI_EditorAttributeHelper.GetSettings(item, false);
+		if (!settings || !m_aValues)
+			return null;
+
+		int index = ConvertValueToIndex(settings.GetValue(ECAI_Setting.PRESET));
+		if (index == -1)
+			return null;
+
+		return SCR_BaseEditorAttributeVar.CreateInt(index);
+	}
+
+	//------------------------------------------------------------------------------------------------
+	override void WriteVariable(Managed item, SCR_BaseEditorAttributeVar var, SCR_AttributesManagerEditorComponent manager, int playerID)
+	{
+		if (!var || !m_aValues)
+			return;
+
+		float preset;
+		if (!ConvertIndexToValue(var.GetInt(), preset))
+			return;
+
+		CAI_Settings settings = CAI_EditorAttributeHelper.GetSettings(item, true);
+		if (!settings)
+			return;
+
+		settings.SetValue(ECAI_Setting.PRESET, preset);
+		CAI_SettingsManager.Invalidate();
+	}
+}
+[BaseContainerProps(), SCR_BaseEditorAttributeCustomTitle()]
+class CAI_BreakCasualtiesEditorAttribute : CAI_BaseSliderEditorAttribute
+{
+	override protected ECAI_Setting GetSetting() { return ECAI_Setting.BREAK_CASUALTIES; }
+}
+
+[BaseContainerProps(), SCR_BaseEditorAttributeCustomTitle()]
+class CAI_FallbackDistanceEditorAttribute : CAI_BaseSliderEditorAttribute
+{
+	override protected ECAI_Setting GetSetting() { return ECAI_Setting.FALLBACK_DISTANCE; }
+}
+
+[BaseContainerProps(), SCR_BaseEditorAttributeCustomTitle()]
+class CAI_StaticWeaponsEditorAttribute : CAI_BaseCheckboxEditorAttribute
+{
+	override protected ECAI_Setting GetSetting() { return ECAI_Setting.STATIC_WEAPONS; }
+}
+
+[BaseContainerProps(), SCR_BaseEditorAttributeCustomTitle()]
+class CAI_StaticWeaponRadiusEditorAttribute : CAI_BaseSliderEditorAttribute
+{
+	override protected ECAI_Setting GetSetting() { return ECAI_Setting.STATIC_WEAPON_RADIUS; }
+}
+
+[BaseContainerProps(), SCR_BaseEditorAttributeCustomTitle()]
+class CAI_GrenadesUnderFireEditorAttribute : CAI_BaseCheckboxEditorAttribute
+{
+	override protected ECAI_Setting GetSetting() { return ECAI_Setting.GRENADES_UNDER_FIRE; }
+}
+
+[BaseContainerProps(), SCR_BaseEditorAttributeCustomTitle()]
+class CAI_SmokeBeforeChargeEditorAttribute : CAI_BaseCheckboxEditorAttribute
+{
+	override protected ECAI_Setting GetSetting() { return ECAI_Setting.SMOKE_BEFORE_CHARGE; }
+}
+
+[BaseContainerProps(), SCR_BaseEditorAttributeCustomTitle()]
+class CAI_DismountEditorAttribute : CAI_BaseCheckboxEditorAttribute
+{
+	override protected ECAI_Setting GetSetting() { return ECAI_Setting.DISMOUNT; }
+}
+
+[BaseContainerProps(), SCR_BaseEditorAttributeCustomTitle()]
+class CAI_DismountDistanceEditorAttribute : CAI_BaseSliderEditorAttribute
+{
+	override protected ECAI_Setting GetSetting() { return ECAI_Setting.DISMOUNT_DISTANCE; }
+}
+
+[BaseContainerProps(), SCR_BaseEditorAttributeCustomTitle()]
+class CAI_VehicleRetreatDamageEditorAttribute : CAI_BaseSliderEditorAttribute
+{
+	override protected ECAI_Setting GetSetting() { return ECAI_Setting.VEHICLE_RETREAT_DAMAGE; }
 }

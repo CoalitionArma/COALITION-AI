@@ -22,11 +22,16 @@ modded class SCR_AIGroupTargetClusterProcessor : Managed
 	}
 
 	//------------------------------------------------------------------------------------------------
-	//! A charging group keeps everyone on the charge, no fireteams are sent to attack or investigate clusters
+	//! A group which is charging, falling back or holding a building sends no fireteams to attack or investigate clusters.
+	//! Its soldiers still fight whoever they see.
 	override EAITargetClusterState EvaluateNewDesiredState(SCR_AITargetClusterState s)
 	{
-		if (m_Utility && m_Utility.m_Owner && m_Utility.m_Owner.CAI_IsBanzai())
-			return EAITargetClusterState.NONE;
+		if (m_Utility && m_Utility.m_Owner)
+		{
+			SCR_AIGroup owner = m_Utility.m_Owner;
+			if (owner.CAI_IsBanzai() || owner.CAI_IsFallingBack() || owner.CAI_IsGarrisoned())
+				return EAITargetClusterState.NONE;
+		}
 
 		return super.EvaluateNewDesiredState(s);
 	}

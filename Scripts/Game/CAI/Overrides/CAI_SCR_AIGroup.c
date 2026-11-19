@@ -25,6 +25,15 @@ modded class SCR_AIGroup : ChimeraAIGroup
 	protected bool m_bCAI_Assault;
 	protected ref SCR_AISettingBase m_CAI_AssaultSpeedSetting;
 
+	// Breaking off after heavy losses or vehicle damage, see CAI_UpdateMorale
+	protected static const ResourceName CAI_FALLBACK_WAYPOINT_PREFAB = "{3C790BB71C5CD960}PrefabsEditable/Auto/AI/Waypoints/E_AIWaypoint_ForcedMove.et";
+	protected static const int CAI_MIN_STRENGTH_TO_BREAK = 3;		//!< Smaller groups never break from casualties
+	protected static const float CAI_SMOKE_DISTANCE = 20;			//!< How far ahead of the group smoke is thrown
+	protected static const float CAI_ASSAULT_SMOKE_RANGE_SQ = 22500;	//!< Assaults starting within 150 m of their waypoint throw smoke
+	protected static ref Resource s_CAI_FallbackWaypointResource;
+	protected int m_iCAI_MaxStrength;			//!< Most soldiers the group ever had
+	protected bool m_bCAI_Broken;				//!< The group broke off once, it won't again
+	protected AIWaypoint m_CAI_FallbackWaypoint;
 	//------------------------------------------------------------------------------------------------
 	//! \return This group's own settings, or null when it uses the mission-wide ones
 	CAI_Settings CAI_GetOverride()
@@ -226,6 +235,10 @@ modded class SCR_AIGroup : ChimeraAIGroup
 		if (banzai)
 		{
 			vector position = m_CAI_BanzaiWaypoint.GetOrigin();
+
+			if (CAI_GetSettings().m_bSmokeBeforeCharge)
+				CAI_ThrowSmoke(position);
+
 			array<AIAgent> agents = {};
 			GetAgents(agents);
 			foreach (AIAgent agent : agents)
@@ -293,6 +306,14 @@ modded class SCR_AIGroup : ChimeraAIGroup
 
 		m_bCAI_Assault = assault;
 
+		// Smoke only helps if the fight is about to start
+		if (assault && CAI_GetSettings().m_bSmokeBeforeCharge)
+		{
+			vector waypointPos = GetCurrentWaypoint().GetOrigin();
+			if (vector.DistanceSqXZ(GetCenterOfMass(), waypointPos) < CAI_ASSAULT_SMOKE_RANGE_SQ)
+				CAI_ThrowSmoke(waypointPos);
+		}
+
 		// Never slower than a run while assaulting
 		SCR_AIGroupSettingsComponent settingsComp = SCR_AIGroupSettingsComponent.Cast(FindComponent(SCR_AIGroupSettingsComponent));
 		if (settingsComp)
@@ -313,5 +334,159 @@ modded class SCR_AIGroup : ChimeraAIGroup
 
 		// Soldiers refresh their cached state
 		CAI_SettingsManager.Invalidate();
+	}
+
+	//------------------------------------------------------------------------------------------------
+	// Smoke
+
+	//------------------------------------------------------------------------------------------------
+	//! Has up to two soldiers who carry smoke grenades throw them a short way ahead of the group, towards the position.
+	//! Uses vanilla's smoke cover logic, which never takes more than half of the group off the fight.
+	void CAI_ThrowSmoke(vector towardsPosition)
+	{
+		SCR_AIGroupUtilityComponent utility = GetGroupUtilityComponent();
+		if (!utility)
+			return;
+
+		vector myPos = GetCenterOfMass();
+		vector direction = towardsPosition - myPos;
+		direction[1] = 0;
+		if (direction.LengthSq() < 1)
+			return;
+
+		direction.Normalize();
+		vector smokePos = myPos + direction * CAI_SMOKE_DISTANCE;
+		smokePos[1] = GetGame().GetWorld().GetSurfaceY(smokePos[0], smokePos[2]);
+
+		array<AIAgent> avoidAgents = {};
+		array<AIAgent> excludeAgents = {};
+		SCR_AIActivitySmokeCoverFeature smokeFeature = new SCR_AIActivitySmokeCoverFeature();
+		smokeFeature.Execute(utility, smokePos, SCR_AIActivitySmokeCoverFeatureProperties.NONE, avoidAgents, excludeAgents, 2);
+	}
+
+	//------------------------------------------------------------------------------------------------
+	// Breaking off
+	//
+	// A group in contact which has lost too many soldiers, or whose vehicle is badly damaged, throws smoke, drops
+	// its orders and falls back away from the enemy on a Forced Move waypoint. It does so once.
+
+	//------------------------------------------------------------------------------------------------
+	//! \return true while the group is on its way to the position it falls back to
+	bool CAI_IsFallingBack()
+	{
+		return m_CAI_FallbackWaypoint && GetCurrentWaypoint() == m_CAI_FallbackWaypoint;
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! \return true while the group holds a building on a Garrison waypoint
+	bool CAI_IsGarrisoned()
+	{
+		return CAI_GarrisonWaypoint.Cast(GetCurrentWaypoint()) != null;
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! Called every 2 s by the group's perception.
+	//! \param inContact the group has identified enemies
+	//! \param enemyPos their position, only used when inContact
+	void CAI_UpdateMorale(bool inContact, vector enemyPos)
+	{
+		int strength = GetAgentsCount();
+		if (strength > m_iCAI_MaxStrength)
+			m_iCAI_MaxStrength = strength;
+
+		// Groups led by a player follow him, and a banzai charge is not called off
+		if (m_bCAI_Broken || !inContact || strength == 0 || IsSlave() || CAI_IsBanzai())
+			return;
+
+		CAI_Settings settings = CAI_GetSettings();
+
+		bool breakOff;
+		if (settings.m_iBreakCasualties > 0 && m_iCAI_MaxStrength >= CAI_MIN_STRENGTH_TO_BREAK)
+		{
+			float lossPercent = 100.0 * (m_iCAI_MaxStrength - strength) / m_iCAI_MaxStrength;
+			breakOff = lossPercent >= settings.m_iBreakCasualties;
+		}
+
+		if (!breakOff && settings.m_iVehicleRetreatDamage > 0)
+			breakOff = CAI_HasDamagedVehicle(settings.m_iVehicleRetreatDamage);
+
+		if (breakOff)
+			CAI_FallBack(enemyPos, settings.m_fFallbackDistance, settings.m_bSmokeBeforeCharge);
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! \return true if a vehicle the group uses, other than a static weapon, has taken at least this much damage
+	protected bool CAI_HasDamagedVehicle(int damagePercent)
+	{
+		SCR_AIGroupUtilityComponent utility = GetGroupUtilityComponent();
+		if (!utility || !utility.m_VehicleMgr || utility.m_VehicleMgr.GetVehiclesCount() == 0)
+			return false;
+
+		array<ref SCR_AIGroupVehicle> vehicles = {};
+		utility.m_VehicleMgr.GetAllVehicles(vehicles);
+		foreach (SCR_AIGroupVehicle vehicle : vehicles)
+		{
+			IEntity entity = vehicle.GetEntity();
+			SCR_AIVehicleUsageComponent usageComp = vehicle.GetVehicleUsageComponent();
+			if (!entity || !usageComp)
+				continue;
+
+			EAIVehicleType vehicleType = usageComp.GetVehicleType();
+			if (vehicleType == EAIVehicleType.STATIC_WEAPON || vehicleType == EAIVehicleType.STATIC_ARTILLERY)
+				continue;
+
+			SCR_DamageManagerComponent damageManager = SCR_DamageManagerComponent.GetDamageManager(entity);
+			if (damageManager && 100 * (1 - damageManager.GetHealthScaled()) >= damagePercent)
+				return true;
+		}
+
+		return false;
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! Server only. Makes the group break off now: smoke, all orders dropped, Forced Move away from the enemy.
+	void CAI_FallBack(vector enemyPos, float distance, bool throwSmoke = true)
+	{
+		m_bCAI_Broken = true;
+
+		vector myPos = GetCenterOfMass();
+		vector direction = myPos - enemyPos;
+		direction[1] = 0;
+		if (direction.LengthSq() < 1)
+			direction = vector.Forward;
+
+		direction.Normalize();
+		vector position = myPos + direction * distance;
+		position[1] = GetGame().GetWorld().GetSurfaceY(position[0], position[2]);
+
+		if (throwSmoke)
+			CAI_ThrowSmoke(enemyPos);
+
+		if (!s_CAI_FallbackWaypointResource || !s_CAI_FallbackWaypointResource.IsValid())
+			s_CAI_FallbackWaypointResource = Resource.Load(CAI_FALLBACK_WAYPOINT_PREFAB);
+
+		if (!s_CAI_FallbackWaypointResource.IsValid())
+			return;
+
+		EntitySpawnParams spawnParams = new EntitySpawnParams();
+		spawnParams.TransformMode = ETransformMode.WORLD;
+		Math3D.MatrixIdentity4(spawnParams.Transform);
+		spawnParams.Transform[3] = position;
+
+		AIWaypoint waypoint = AIWaypoint.Cast(GetGame().SpawnEntityPrefab(s_CAI_FallbackWaypointResource, GetGame().GetWorld(), spawnParams));
+		if (!waypoint)
+			return;
+
+		// The orders it had would only lead it back into the fight. The waypoints themselves are left in the world.
+		array<AIWaypoint> waypoints = {};
+		GetWaypoints(waypoints);
+		foreach (AIWaypoint oldWaypoint : waypoints)
+		{
+			if (oldWaypoint)
+				RemoveWaypoint(oldWaypoint);
+		}
+
+		m_CAI_FallbackWaypoint = waypoint;
+		AddWaypoint(waypoint);
 	}
 }

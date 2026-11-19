@@ -4,6 +4,8 @@
 //! - Artillery support: a friendly group crewing static artillery answers a contact report with a fire mission.
 //! - Hunt: a group without orders keeps a Search and Destroy waypoint on the nearest enemy player.
 //! - Banzai charge and Search and Destroy assault: their start and end are detected from here, see SCR_AIGroup.
+//! - Breaking off after losses: checked from here, see SCR_AIGroup.CAI_UpdateMorale.
+//! - Vehicle passengers dismount on contact, and soldiers crew empty static weapons near the group.
 modded class SCR_AIGroupPerception : Managed
 {
 	protected static const ResourceName CAI_HUNT_WAYPOINT_PREFAB = "{B3E7B8DC2BAB8ACC}Prefabs/AI/Waypoints/AIWaypoint_SearchAndDestroy.et";
@@ -21,6 +23,13 @@ modded class SCR_AIGroupPerception : Managed
 	protected ref SCR_AIStaticArtilleryActivity m_CAI_FireMission;
 	protected float m_fCAI_NextFireMissionTime;
 
+	// Static weapons, see CAI_CrewStaticWeapons
+	protected static const float CAI_STATIC_WEAPON_INTERVAL_S = 15;
+	protected float m_fCAI_NextStaticWeaponTime;
+	protected bool m_bCAI_StaticWeaponsScanned;
+	protected vector m_vCAI_StaticWeaponScanPos;
+	protected ref array<SCR_AIVehicleUsageComponent> m_aCAI_StaticWeapons = {}; //!< Weak pointers, found by the last scan
+
 	protected AIWaypoint m_CAI_HuntWaypoint;	//!< Waypoint we spawned for hunting, null when not hunting
 	protected float m_fCAI_NextHuntTime;
 
@@ -30,7 +39,7 @@ modded class SCR_AIGroupPerception : Managed
 	{
 		super.Update();
 
-		if (!m_Group)
+		if (!m_Group || !m_Utility)
 			return;
 
 		if (!m_bCAI_Registered)
@@ -44,6 +53,30 @@ modded class SCR_AIGroupPerception : Managed
 			return;
 
 		float timeNow = pm.GetTime();
+
+		// Biggest threat the group can see right now
+		bool inContact;
+		vector enemyPos;
+		float enemyDistance;
+		if (m_MostDangerousCluster && m_MostDangerousCluster.m_State && m_MostDangerousCluster.m_State.m_iCountIdentified > 0)
+		{
+			inContact = true;
+			enemyPos = m_MostDangerousCluster.m_State.GetCenterPosition();
+			enemyDistance = m_MostDangerousCluster.m_State.m_fDistMin;
+		}
+
+		m_Group.CAI_UpdateMorale(inContact, enemyPos);
+
+		if (inContact)
+		{
+			CAI_DismountPassengers(enemyDistance);
+
+			if (timeNow >= m_fCAI_NextStaticWeaponTime)
+			{
+				m_fCAI_NextStaticWeaponTime = timeNow + CAI_STATIC_WEAPON_INTERVAL_S;
+				CAI_CrewStaticWeapons();
+			}
+		}
 
 		if (m_CAI_FireMission)
 			CAI_UpdateFireMission(timeNow);
@@ -426,5 +459,161 @@ modded class SCR_AIGroupPerception : Managed
 
 		SCR_EntityHelper.DeleteEntityAndChildren(m_CAI_HuntWaypoint);
 		m_CAI_HuntWaypoint = null;
+	}
+
+	//------------------------------------------------------------------------------------------------
+	// Vehicles and static weapons
+
+	//------------------------------------------------------------------------------------------------
+	//! \return The soldier's utility component if he is alive, or null
+	protected SCR_AIUtilityComponent CAI_GetSoldier(SCR_AIInfoComponent infoComp, out ChimeraCharacter outCharacter)
+	{
+		SCR_ChimeraAIAgent agent = SCR_ChimeraAIAgent.Cast(infoComp.GetOwner());
+		if (!agent || !agent.m_UtilityComponent)
+			return null;
+
+		ChimeraCharacter character = ChimeraCharacter.Cast(agent.GetControlledEntity());
+		if (!character)
+			return null;
+
+		CharacterControllerComponent controller = character.GetCharacterController();
+		if (!controller || controller.GetLifeState() != ECharacterLifeState.ALIVE)
+			return null;
+
+		outCharacter = character;
+		return agent.m_UtilityComponent;
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! Passengers get out when identified enemies are close. Drivers and gunners stay with the vehicle.
+	protected void CAI_DismountPassengers(float enemyDistance)
+	{
+		if (!m_Utility.m_VehicleMgr || m_Utility.m_VehicleMgr.GetVehiclesCount() == 0)
+			return;
+
+		CAI_Settings settings = m_Group.CAI_GetSettings();
+		if (!settings.m_bDismountOnContact || enemyDistance > settings.m_fDismountDistance)
+			return;
+
+		foreach (SCR_AIInfoComponent infoComp : m_Utility.m_aInfoComponents)
+		{
+			ChimeraCharacter character;
+			SCR_AIUtilityComponent utility = CAI_GetSoldier(infoComp, character);
+			if (!utility)
+				continue;
+
+			CompartmentAccessComponent compartmentAccess = character.GetCompartmentAccessComponent();
+			if (!compartmentAccess)
+				continue;
+
+			CargoCompartmentSlot cargoSlot = CargoCompartmentSlot.Cast(compartmentAccess.GetCompartment());
+			if (!cargoSlot || utility.HasActionOfType(SCR_AIGetOutVehicle))
+				continue;
+
+			utility.AddAction(new SCR_AIGetOutVehicle(utility, null, cargoSlot.GetOwner()));
+		}
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! Sends soldiers on foot to empty static weapons near the group, nearest soldier first, at most half of the group.
+	//! New soldiers are only sent once the previous ones have arrived.
+	protected void CAI_CrewStaticWeapons()
+	{
+		CAI_Settings settings = m_Group.CAI_GetSettings();
+		if (!settings.m_bUseStaticWeapons || m_Group.IsSlave())
+			return;
+
+		vector myPos = m_Group.GetCenterOfMass();
+		float radius = settings.m_fStaticWeaponRadius;
+
+		// The surroundings are searched again only after the group has moved half the radius
+		if (!m_bCAI_StaticWeaponsScanned || vector.DistanceSqXZ(myPos, m_vCAI_StaticWeaponScanPos) > 0.25 * radius * radius)
+		{
+			m_bCAI_StaticWeaponsScanned = true;
+			m_vCAI_StaticWeaponScanPos = myPos;
+			m_aCAI_StaticWeapons.Clear();
+			GetGame().GetWorld().QueryEntitiesBySphere(myPos, radius, CAI_QueryStaticWeapon, null, EQueryEntitiesFlags.ALL);
+		}
+
+		if (m_aCAI_StaticWeapons.IsEmpty())
+			return;
+
+		// Soldiers on foot, and how many are already on a weapon or on their way to one
+		array<SCR_AIUtilityComponent> freeSoldiers = {};
+		array<vector> freePositions = {};
+		int soldierCount, crewCount;
+		foreach (SCR_AIInfoComponent infoComp : m_Utility.m_aInfoComponents)
+		{
+			ChimeraCharacter character;
+			SCR_AIUtilityComponent utility = CAI_GetSoldier(infoComp, character);
+			if (!utility)
+				continue;
+
+			soldierCount++;
+
+			// Someone is still on his way, wait for him so two soldiers don't run for the same weapon
+			if (utility.HasActionOfType(SCR_AIGetInVehicle))
+				return;
+
+			CompartmentAccessComponent compartmentAccess = character.GetCompartmentAccessComponent();
+			if (compartmentAccess && compartmentAccess.IsInCompartment())
+			{
+				crewCount++;
+				continue;
+			}
+
+			freeSoldiers.Insert(utility);
+			freePositions.Insert(character.GetOrigin());
+		}
+
+		int maxCrew = Math.Max(soldierCount / 2, 1);
+
+		foreach (SCR_AIVehicleUsageComponent usageComp : m_aCAI_StaticWeapons)
+		{
+			if (crewCount >= maxCrew || freeSoldiers.IsEmpty())
+				return;
+
+			if (!usageComp || usageComp.GetDamageState() == EDamageState.DESTROYED)
+				continue;
+
+			TurretCompartmentSlot turretSlot = usageComp.GetTurretCompartmentSlot();
+			if (!turretSlot || turretSlot.GetOccupant())
+				continue;
+
+			vector weaponPos = usageComp.GetOwner().GetOrigin();
+			int nearest;
+			float nearestDistSq = float.MAX;
+			foreach (int i, vector soldierPos : freePositions)
+			{
+				float distSq = vector.DistanceSq(soldierPos, weaponPos);
+				if (distSq < nearestDistSq)
+				{
+					nearestDistSq = distSq;
+					nearest = i;
+				}
+			}
+
+			SCR_AIUtilityComponent gunner = freeSoldiers[nearest];
+			freeSoldiers.Remove(nearest);
+			freePositions.Remove(nearest);
+
+			m_Utility.AddUsableVehicle(usageComp);
+			gunner.AddAction(new SCR_AIGetInVehicle(gunner, null, usageComp.GetOwner(), turretSlot, EAICompartmentType.Turret));
+			crewCount++;
+		}
+	}
+
+	//------------------------------------------------------------------------------------------------
+	protected bool CAI_QueryStaticWeapon(IEntity entity)
+	{
+		SCR_AIVehicleUsageComponent usageComp = SCR_AIVehicleUsageComponent.Cast(entity.FindComponent(SCR_AIVehicleUsageComponent));
+		if (!usageComp)
+			return true;
+
+		EAIVehicleType vehicleType = usageComp.GetVehicleType();
+		if (vehicleType == EAIVehicleType.STATIC_WEAPON || vehicleType == EAIVehicleType.STATIC_ARTILLERY)
+			m_aCAI_StaticWeapons.Insert(usageComp);
+
+		return true;
 	}
 }

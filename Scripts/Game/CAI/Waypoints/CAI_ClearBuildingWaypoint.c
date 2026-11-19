@@ -266,13 +266,20 @@ class CAI_ClearBuildingWaypointState : SCR_AIWaypointState
 		GetGame().GetCallqueue().Remove(QueryStep);
 		m_aSamples.Clear();
 
-		if (m_aPositions.IsEmpty() || !AssignPositions())
-		{
+		if (m_aPositions.IsEmpty() || !StartWork())
 			Finish();
-			return;
-		}
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! Called once the positions inside the building are known. The Garrison waypoint does something else with them.
+	//! \return false if nothing can be done, which completes the waypoint
+	protected bool StartWork()
+	{
+		if (!AssignPositions())
+			return false;
 
 		GetGame().GetCallqueue().CallLater(UpdateStep, UPDATE_STEP_MS, true);
+		return true;
 	}
 
 	//------------------------------------------------------------------------------------------------

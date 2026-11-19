@@ -26,7 +26,27 @@ enum ECAI_Setting
 	LAUNCHER_CHANCE,
 	AUTO_FIRE_RANGE,
 	RIFLE_BURST,
-	MG_BURST
+	MG_BURST,
+	PRESET,
+	BREAK_CASUALTIES,
+	FALLBACK_DISTANCE,
+	STATIC_WEAPONS,
+	STATIC_WEAPON_RADIUS,
+	GRENADES_UNDER_FIRE,
+	SMOKE_BEFORE_CHARGE,
+	DISMOUNT,
+	DISMOUNT_DISTANCE,
+	VEHICLE_RETREAT_DAMAGE
+}
+
+//! Ready-made sets of values for the skill related settings, see CAI_Settings.ApplyPreset
+enum ECAI_Preset
+{
+	CUSTOM,		//!< Values were set one by one
+	MILITIA,	//!< Fires a lot, hits little, breaks early
+	REGULAR,	//!< Fires a lot, somewhat inaccurate
+	ELITE,		//!< Accurate and steady
+	CAG			//!< Very accurate, very fast, never breaks
 }
 
 //------------------------------------------------------------------------------------------------
@@ -115,6 +135,38 @@ class CAI_Settings
 	[Attribute("15", UIWidgets.Slider, "Longest burst of a machine gun or automatic rifle such as the M249 or RPK, in rounds. Each burst is 60 to 100 percent of this. 0 = vanilla, about 2 to 7 rounds.", "0 40 1")]
 	int m_iMachineGunBurstRounds;
 
+	[Attribute("0", UIWidgets.ComboBox, "Skill preset. Anything but CUSTOM replaces the accuracy, fire, spotting, suppression, reaction, burst, launcher and casualty values of this object when the mission starts.", "", ParamEnumArray.FromEnum(ECAI_Preset))]
+	ECAI_Preset m_ePreset;
+
+	[Attribute("60", UIWidgets.Slider, "A group in contact which has lost this many percent of its soldiers breaks off: it throws smoke, drops its orders and falls back away from the enemy. Once per group. 0 = never, as in vanilla.", "0 100 5")]
+	int m_iBreakCasualties;
+
+	[Attribute("250", UIWidgets.Slider, "How far (metres) a group falls back when it breaks off.", "50 1000 50")]
+	float m_fFallbackDistance;
+
+	[Attribute("1", UIWidgets.CheckBox, "Groups in contact crew empty machine guns, mortars and other static weapons near them. Up to half of the group.")]
+	bool m_bUseStaticWeapons;
+
+	[Attribute("40", UIWidgets.Slider, "Static weapons within this distance (metres) of the group are considered.", "10 100 5")]
+	float m_fStaticWeaponRadius;
+
+	[Attribute("1", UIWidgets.CheckBox, "Soldiers throw frag grenades even while under heavy fire. Vanilla soldiers stop throwing once they are suppressed.")]
+	bool m_bGrenadesUnderFire;
+
+	[Attribute("1", UIWidgets.CheckBox, "Groups throw smoke ahead of themselves when they start a banzai charge, and when they start a Search and Destroy assault close to its waypoint.")]
+	bool m_bSmokeBeforeCharge;
+
+	[Attribute("1", UIWidgets.CheckBox, "Passengers get out of their vehicle when the group has identified enemies nearby. Drivers and gunners stay.")]
+	bool m_bDismountOnContact;
+
+	[Attribute("300", UIWidgets.Slider, "Passengers dismount when identified enemies are within this distance (metres).", "50 1000 50")]
+	float m_fDismountDistance;
+
+	[Attribute("50", UIWidgets.Slider, "A group in contact breaks off and falls back, as with casualties, once one of its vehicles has taken this many percent damage. 0 = never.", "0 100 5")]
+	int m_iVehicleRetreatDamage;
+
+	protected bool m_bPresetInitialised;
+
 	// Values of the unmodified game, used when the mod is disabled
 	static const float VANILLA_AIM_ERROR = 1;
 	static const float VANILLA_NIGHT_AIM_PENALTY = 2;
@@ -149,6 +201,17 @@ class CAI_Settings
 		m_fAutoFireRange = 150;
 		m_iRifleBurstRounds = 6;
 		m_iMachineGunBurstRounds = 15;
+		m_ePreset = ECAI_Preset.CUSTOM;
+		m_iBreakCasualties = 60;
+		m_fFallbackDistance = 250;
+		m_bUseStaticWeapons = true;
+		m_fStaticWeaponRadius = 40;
+		m_bGrenadesUnderFire = true;
+		m_bSmokeBeforeCharge = true;
+		m_bDismountOnContact = true;
+		m_fDismountDistance = 300;
+		m_iVehicleRetreatDamage = 50;
+		m_bPresetInitialised = true;
 		m_fArtilleryRange = 2000;
 		m_iArtilleryRounds = 4;
 		m_fArtilleryCooldown = 120;
@@ -181,6 +244,17 @@ class CAI_Settings
 		m_fAutoFireRange = VANILLA_AUTO_FIRE_RANGE;
 		m_iRifleBurstRounds = 0;
 		m_iMachineGunBurstRounds = 0;
+		m_ePreset = ECAI_Preset.CUSTOM;
+		m_iBreakCasualties = 0;
+		m_fFallbackDistance = 250;
+		m_bUseStaticWeapons = false;
+		m_fStaticWeaponRadius = 40;
+		m_bGrenadesUnderFire = false;
+		m_bSmokeBeforeCharge = false;
+		m_bDismountOnContact = false;
+		m_fDismountDistance = 300;
+		m_iVehicleRetreatDamage = 0;
+		m_bPresetInitialised = true;
 		m_fArtilleryRange = 2000;
 		m_iArtilleryRounds = 4;
 		m_fArtilleryCooldown = 120;
@@ -235,6 +309,17 @@ class CAI_Settings
 		m_fAutoFireRange = other.m_fAutoFireRange;
 		m_iRifleBurstRounds = other.m_iRifleBurstRounds;
 		m_iMachineGunBurstRounds = other.m_iMachineGunBurstRounds;
+		m_ePreset = other.m_ePreset;
+		m_iBreakCasualties = other.m_iBreakCasualties;
+		m_fFallbackDistance = other.m_fFallbackDistance;
+		m_bUseStaticWeapons = other.m_bUseStaticWeapons;
+		m_fStaticWeaponRadius = other.m_fStaticWeaponRadius;
+		m_bGrenadesUnderFire = other.m_bGrenadesUnderFire;
+		m_bSmokeBeforeCharge = other.m_bSmokeBeforeCharge;
+		m_bDismountOnContact = other.m_bDismountOnContact;
+		m_fDismountDistance = other.m_fDismountDistance;
+		m_iVehicleRetreatDamage = other.m_iVehicleRetreatDamage;
+		m_bPresetInitialised = true;
 	}
 
 	//------------------------------------------------------------------------------------------------
@@ -269,6 +354,16 @@ class CAI_Settings
 			case ECAI_Setting.AUTO_FIRE_RANGE:			return m_fAutoFireRange;
 			case ECAI_Setting.RIFLE_BURST:				return m_iRifleBurstRounds;
 			case ECAI_Setting.MG_BURST:					return m_iMachineGunBurstRounds;
+			case ECAI_Setting.PRESET:					return m_ePreset;
+			case ECAI_Setting.BREAK_CASUALTIES:			return m_iBreakCasualties;
+			case ECAI_Setting.FALLBACK_DISTANCE:		return m_fFallbackDistance;
+			case ECAI_Setting.STATIC_WEAPONS:			return BoolToFloat(m_bUseStaticWeapons);
+			case ECAI_Setting.STATIC_WEAPON_RADIUS:		return m_fStaticWeaponRadius;
+			case ECAI_Setting.GRENADES_UNDER_FIRE:		return BoolToFloat(m_bGrenadesUnderFire);
+			case ECAI_Setting.SMOKE_BEFORE_CHARGE:		return BoolToFloat(m_bSmokeBeforeCharge);
+			case ECAI_Setting.DISMOUNT:					return BoolToFloat(m_bDismountOnContact);
+			case ECAI_Setting.DISMOUNT_DISTANCE:		return m_fDismountDistance;
+			case ECAI_Setting.VEHICLE_RETREAT_DAMAGE:	return m_iVehicleRetreatDamage;
 		}
 
 		return 0;
@@ -279,6 +374,10 @@ class CAI_Settings
 	//! Call CAI_SettingsManager.Invalidate() afterwards so AI picks the change up.
 	void SetValue(ECAI_Setting setting, float value)
 	{
+		// Changing one of the values a preset controls means the settings no longer match that preset
+		if (IsPresetSetting(setting))
+			m_ePreset = ECAI_Preset.CUSTOM;
+
 		switch (setting)
 		{
 			case ECAI_Setting.ENABLED:					m_bEnabled = value != 0; break;
@@ -307,7 +406,100 @@ class CAI_Settings
 			case ECAI_Setting.AUTO_FIRE_RANGE:			m_fAutoFireRange = Math.Clamp(value, 50, 400); break;
 			case ECAI_Setting.RIFLE_BURST:				m_iRifleBurstRounds = Math.Round(Math.Clamp(value, 0, 15)); break;
 			case ECAI_Setting.MG_BURST:					m_iMachineGunBurstRounds = Math.Round(Math.Clamp(value, 0, 40)); break;
+			case ECAI_Setting.PRESET:					ApplyPresetValue(value); break;
+			case ECAI_Setting.BREAK_CASUALTIES:			m_iBreakCasualties = Math.Round(Math.Clamp(value, 0, 100)); break;
+			case ECAI_Setting.FALLBACK_DISTANCE:		m_fFallbackDistance = Math.Clamp(value, 50, 1000); break;
+			case ECAI_Setting.STATIC_WEAPONS:			m_bUseStaticWeapons = value != 0; break;
+			case ECAI_Setting.STATIC_WEAPON_RADIUS:		m_fStaticWeaponRadius = Math.Clamp(value, 10, 100); break;
+			case ECAI_Setting.GRENADES_UNDER_FIRE:		m_bGrenadesUnderFire = value != 0; break;
+			case ECAI_Setting.SMOKE_BEFORE_CHARGE:		m_bSmokeBeforeCharge = value != 0; break;
+			case ECAI_Setting.DISMOUNT:					m_bDismountOnContact = value != 0; break;
+			case ECAI_Setting.DISMOUNT_DISTANCE:		m_fDismountDistance = Math.Clamp(value, 50, 1000); break;
+			case ECAI_Setting.VEHICLE_RETREAT_DAMAGE:	m_iVehicleRetreatDamage = Math.Round(Math.Clamp(value, 0, 100)); break;
 		}
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! \return true for the settings ApplyPreset writes
+	protected bool IsPresetSetting(ECAI_Setting setting)
+	{
+		switch (setting)
+		{
+			case ECAI_Setting.AIM_ERROR:
+			case ECAI_Setting.NIGHT_AIM_PENALTY:
+			case ECAI_Setting.FIRE_TEMPO:
+			case ECAI_Setting.PERCEPTION:
+			case ECAI_Setting.SUPPRESSED_PERCEPTION:
+			case ECAI_Setting.SUPPRESSION:
+			case ECAI_Setting.TARGET_EVAL_INTERVAL:
+			case ECAI_Setting.DECISION_DELAY:
+			case ECAI_Setting.LAUNCHER_CHANCE:
+			case ECAI_Setting.AUTO_FIRE_RANGE:
+			case ECAI_Setting.RIFLE_BURST:
+			case ECAI_Setting.MG_BURST:
+			case ECAI_Setting.BREAK_CASUALTIES:
+				return true;
+		}
+
+		return false;
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! Replaces the skill related values with those of a preset. CUSTOM changes nothing.
+	//! Militia and Regular fire often and long but are inaccurate. Elite is the mod's default tuning. CAG is the top end.
+	void ApplyPreset(ECAI_Preset preset)
+	{
+		m_ePreset = preset;
+
+		//                                     aim   night tempo spot  spotSup suppr eval  delay launch auto  rifle mg  break
+		switch (preset)
+		{
+			case ECAI_Preset.MILITIA:	SetPresetValues(1.6,  2.5,  1.5,  0.9,  0.4,    1.3,  0.5,  5,    40,    200,  8,    20, 40); break;
+			case ECAI_Preset.REGULAR:	SetPresetValues(1.15, 2,    1.5,  1.1,  0.5,    1,    0.4,  3.5,  50,    150,  6,    15, 55); break;
+			case ECAI_Preset.ELITE:		SetPresetValues(0.6,  1.5,  1.35, 1.5,  0.7,    0.6,  0.3,  2,    50,    150,  6,    15, 70); break;
+			case ECAI_Preset.CAG:		SetPresetValues(0.3,  1.1,  1.6,  2.2,  1,      0.25, 0.2,  0.5,  30,    75,   3,    8,  0); break;
+		}
+	}
+
+	//------------------------------------------------------------------------------------------------
+	protected void ApplyPresetValue(float value)
+	{
+		int preset = Math.Round(value);
+		if (preset < ECAI_Preset.CUSTOM || preset > ECAI_Preset.CAG)
+			preset = ECAI_Preset.CUSTOM;
+
+		ApplyPreset(preset);
+	}
+
+	//------------------------------------------------------------------------------------------------
+	protected void SetPresetValues(float aimError, float nightPenalty, float fireTempo, float perception, float suppressedPerception, float suppression,
+		float evalInterval, float decisionDelay, int launcherChance, float autoFireRange, int rifleBurst, int machineGunBurst, int breakCasualties)
+	{
+		m_fAimErrorScale = aimError;
+		m_fNightAimPenalty = nightPenalty;
+		m_fFireTempo = fireTempo;
+		m_fPerceptionScale = perception;
+		m_fSuppressedPerception = suppressedPerception;
+		m_fSuppressionScale = suppression;
+		m_fTargetEvalInterval = evalInterval;
+		m_fDecisionDelay = decisionDelay;
+		m_iLauncherVsInfantryChance = launcherChance;
+		m_fAutoFireRange = autoFireRange;
+		m_iRifleBurstRounds = rifleBurst;
+		m_iMachineGunBurstRounds = machineGunBurst;
+		m_iBreakCasualties = breakCasualties;
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! Applies a preset chosen in Workbench the first time the settings are used. Objects made in script skip this.
+	void InitPreset()
+	{
+		if (m_bPresetInitialised)
+			return;
+
+		m_bPresetInitialised = true;
+		if (m_ePreset != ECAI_Preset.CUSTOM)
+			ApplyPreset(m_ePreset);
 	}
 
 	//------------------------------------------------------------------------------------------------
@@ -394,6 +586,9 @@ class CAI_SettingsManager
 		CAI_Settings settings = groupOverride;
 		if (!settings)
 			settings = GetGlobal();
+
+		if (settings)
+			settings.InitPreset();
 
 		if (!settings || !settings.m_bEnabled)
 			return GetVanilla();

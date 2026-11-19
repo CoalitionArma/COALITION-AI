@@ -265,8 +265,18 @@ modded class SCR_AICombatComponent : ScriptComponent
 		int prevMuzzle = m_iSelectedMuzzle;
 		float nextEvaluationBefore_ms = m_fNextWeaponTargetEvaluation_ms;
 
+		// Grenades under fire: vanilla reads the threat inside the call below to decide whether frags are allowed
+		SCR_AIThreatSystem threatSystem;
+		if (m_Utility && m_CAI_Settings && m_CAI_Settings.m_bGrenadesUnderFire)
+			threatSystem = m_Utility.m_ThreatSystem;
+
+		if (threatSystem)
+			threatSystem.CAI_SetGrenadeThreatCap(true);
+
 		super.EvaluateWeaponAndTarget(outWeaponEvent, outSelectedTargetChanged, outPrevTarget, outCurrentTarget, outRetreatTargetChanged, outCompartmentChanged);
 
+		if (threatSystem)
+			threatSystem.CAI_SetGrenadeThreatCap(false);
 		if (!m_CAI_Settings)
 			return;
 

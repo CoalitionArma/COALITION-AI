@@ -14,25 +14,35 @@ Every setting can be set by mission makers in Workbench and changed live by a Ga
 - **Suppression**: soldiers take less suppression from impacts, fly-bys and explosions, so they keep fighting under fire.
 - **Faster reactions**: targets and weapons are re-evaluated more often, and groups commit to a contact after 2 seconds instead of 5.
 - **Forced skill**: optionally force one vanilla skill level on all AI.
+- **Skill presets**: one dropdown sets all of the above, plus bursts, launcher use and when a group breaks off. **Militia** and **Regular** fire often and long but are inaccurate, **Elite** is accurate and steady, **CAG** is very accurate, very fast and never breaks off.
 
 ### Weapons
 - **Launchers against infantry**: a soldier with a rocket launcher may use it on infantry he can see, between 40 and 300 m. Vanilla keeps launchers for vehicles.
 - **Automatic fire at range**: rifles that can fire automatic or burst do so out to 150 m instead of 50 m.
 - **Longer bursts**: configurable burst length for rifles, and for machine guns and automatic rifles such as the M249 and RPK.
+- **Grenades under fire**: soldiers keep throwing frag grenades while suppressed. Vanilla soldiers stop.
+- **Static weapons**: groups in contact crew empty machine guns, mortars and other static weapons near them, up to half of the group.
 
 ### Group coordination
 - **Contact reports**: a group that sees enemies reports them to friendly groups in range, which move to investigate and join the fight.
 - **Artillery support**: a friendly group crewing mortars or other static artillery answers a contact report with a fire mission. It holds fire if friendly AI or players are near the target.
 - **Hunt**: groups without orders keep searching for the nearest enemy player. Off by default.
 - **Search and Destroy assault**: any group on a Search and Destroy waypoint assaults all-out. It charges into the area firing on the move, cannot be suppressed, fires at full tempo and keeps pushing instead of waiting in cover.
+- **Breaking off**: a group in contact that has lost most of its soldiers throws smoke, drops its orders and falls back away from the enemy. Vanilla groups fight to the last man.
+- **Smoke**: groups throw smoke ahead of a banzai charge, ahead of a close Search and Destroy assault, and when they break off.
+
+### Vehicles
+- **Dismount on contact**: passengers get out when the group has identified enemies nearby. Drivers and gunners stay.
+- **Retreat when damaged**: a group whose vehicle is badly damaged in contact breaks off and falls back.
 
 ### New Game Master orders
-Both are placed like any other waypoint: select a group, pick the order from the command bar, click the destination.
+All three are placed like any other waypoint: select a group, pick the order from the command bar, click the destination.
 
 - **Banzai charge**: the group breaks formation and sprints straight at the position, ignoring cover and suppression. Sprinting soldiers cannot aim, so they do not fire until they arrive.
 - **Clear building**: place it on a building. The group works out the walkable spots inside, floor by floor, splits them among its soldiers and sweeps them, then carries on with its next waypoint.
+- **Garrison building**: place it on a building. The soldiers spread out inside and hold it. They fight from where they are and return to their spots afterwards. The order stays until the group is given another one.
 
-The command bar is widened from 9 to 12 slots so the vanilla orders and the two new ones fit on one page.
+The command bar is widened from 9 to 13 slots so the vanilla orders and the three new ones fit on one page.
 
 ### Movement
 - **Roads**: soldiers on foot no longer treat roads as much cheaper than open ground, so they head for a waypoint directly instead of running down the nearest road. Vehicles are not affected.
@@ -42,6 +52,7 @@ The command bar is widened from 9 to 12 slots so the vanilla orders and the two 
 | Setting | COALITION AI default | Vanilla |
 | --- | --- | --- |
 | Enhanced AI (master switch) | On | - |
+| Skill preset | Custom | - |
 | Forced skill | Unit default | Unit default |
 | Aiming error | x0.6 | x1 |
 | Night aiming penalty | x1.5 | x2 |
@@ -61,6 +72,31 @@ The command bar is widened from 9 to 12 slots so the vanilla orders and the two 
 | Automatic fire range | 150 m | 50 m |
 | Rifle burst length | up to 6 rounds | about 1 to 4 |
 | Machine gun burst length | up to 15 rounds | about 2 to 7 |
+| Grenades under fire | On | Off |
+| Crew static weapons / search radius | On / 40 m | Off |
+| Smoke before a charge | On | Off |
+| Break off at casualties / fall back distance | 60 percent / 250 m | Never |
+| Dismount on contact / distance | On / 300 m | Off |
+| Vehicle retreat damage | 50 percent | Never |
+
+### Skill presets
+| Value | Militia | Regular | Elite | CAG |
+| --- | --- | --- | --- | --- |
+| Aiming error | x1.6 | x1.15 | x0.6 | x0.3 |
+| Night aiming penalty | x2.5 | x2 | x1.5 | x1.1 |
+| Fire tempo | x1.5 | x1.5 | x1.35 | x1.6 |
+| Spotting speed | x0.9 | x1.1 | x1.5 | x2.2 |
+| Spotting while suppressed | x0.4 | x0.5 | x0.7 | x1 |
+| Suppression taken | x1.3 | x1 | x0.6 | x0.25 |
+| Target re-evaluation | 0.5 s | 0.4 s | 0.3 s | 0.2 s |
+| Group decision delay | 5 s | 3.5 s | 2 s | 0.5 s |
+| Launchers against infantry | 40 percent | 50 percent | 50 percent | 30 percent |
+| Automatic fire range | 200 m | 150 m | 150 m | 75 m |
+| Rifle burst length | 8 | 6 | 6 | 3 |
+| Machine gun burst length | 20 | 15 | 15 | 8 |
+| Break off at casualties | 40 percent | 55 percent | 70 percent | Never |
+
+A preset only writes the values in this table. Changing one of them afterwards switches the preset back to Custom.
 
 With the master switch off, every setting falls back to its vanilla value.
 
@@ -74,6 +110,8 @@ The road change is the exception. It is a project setting in `addon.gproj` and c
 
 ## For Scripters
 - `SCR_AIGroup.CAI_StartBanzai(vector position)` gives a group a banzai waypoint in front of its other waypoints. `CAI_StopBanzai()` calls it off.
+- `SCR_AIGroup.CAI_FallBack(vector enemyPos, float distance)` makes a group break off now. `CAI_ThrowSmoke(vector towardsPosition)` has it throw smoke.
+- `CAI_Settings.ApplyPreset(ECAI_Preset preset)` applies a skill preset to a settings object.
 - `SCR_AIGroup.CAI_GetSettings()` returns the settings a group is using. `CAI_CreateOverride()` and `CAI_ClearOverride()` manage its own copy.
 - `SCR_BaseGameMode.CAI_GetSettings()` returns the mission-wide settings.
 - After changing values on a settings object, call `CAI_SettingsManager.Invalidate()` so the AI picks them up.
@@ -83,10 +121,10 @@ The road change is the exception. It is a project setting in `addon.gproj` and c
 | --- | --- |
 | `Scripts/Game/CAI/Settings` | `CAI_Settings`, the settings manager and `CAI_SettingsComponent` |
 | `Scripts/Game/CAI/Overrides` | Modded vanilla AI classes: combat component, aiming, fire timing, threat, combat movement, group perception and target clusters |
-| `Scripts/Game/CAI/Waypoints` | The Clear building waypoint |
+| `Scripts/Game/CAI/Waypoints` | The Clear building and Garrison building waypoints |
 | `Scripts/Game/CAI/Editor` | Game Master attributes for every setting |
 | `Configs/Editor` | Attribute list, attribute category, command bar entries and placeable waypoint registry |
-| `PrefabsEditable/Auto/AI/Waypoints` | Banzai charge and Clear building waypoint prefabs |
+| `PrefabsEditable/Auto/AI/Waypoints` | Banzai charge, Clear building and Garrison building waypoint prefabs |
 | `UI` | Attribute tab icon and the widened command bar layout |
 
 ## Compatibility

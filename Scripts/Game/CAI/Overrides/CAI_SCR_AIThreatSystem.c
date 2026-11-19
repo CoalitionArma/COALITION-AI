@@ -3,6 +3,9 @@
 modded class SCR_AIThreatSystem
 {
 	protected float m_fCAI_SuppressionScale = 1;
+	protected bool m_bCAI_CapThreat;
+
+	protected static const float CAI_GRENADE_THREAT_CAP = 0.5; //!< Below vanilla's limit of 0.6 for throwing frag grenades
 
 	//------------------------------------------------------------------------------------------------
 	void CAI_SetSuppressionScale(float scale)
@@ -53,5 +56,24 @@ modded class SCR_AIThreatSystem
 		// A scale above 1 becomes a chance to count it twice
 		if (m_fCAI_SuppressionScale > 1 && Math.RandomFloat01() < m_fCAI_SuppressionScale - 1)
 			super.ThreatExplosion(distance);
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! Vanilla forbids frag grenades to a soldier whose threat is above 0.6. The combat component switches this on
+	//! only while it selects weapon and target, so that check sees a lower threat and everything else the real one.
+	void CAI_SetGrenadeThreatCap(bool enabled)
+	{
+		m_bCAI_CapThreat = enabled;
+	}
+
+	//------------------------------------------------------------------------------------------------
+	override float GetThreatMeasure()
+	{
+		float threat = super.GetThreatMeasure();
+
+		if (m_bCAI_CapThreat && threat > CAI_GRENADE_THREAT_CAP)
+			return CAI_GRENADE_THREAT_CAP;
+
+		return threat;
 	}
 }
