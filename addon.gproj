@@ -1,0 +1,8 @@
+GameProject {
+ ID "COALITIONAI"
+ GUID "6B0DCB89C9D4B20B"
+ TITLE "COALITION AI"
+ Dependencies {
+  "58D0FB3206B6F859"
+ }
+}
