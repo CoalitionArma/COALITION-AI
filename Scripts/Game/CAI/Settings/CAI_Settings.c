@@ -21,7 +21,12 @@ enum ECAI_Setting
 	ARTILLERY_SAFE_DISTANCE,
 	ARTILLERY_MIN_TARGETS,
 	HUNT,
-	HUNT_RADIUS
+	HUNT_RADIUS,
+	ASSAULT_SND,
+	LAUNCHER_CHANCE,
+	AUTO_FIRE_RANGE,
+	RIFLE_BURST,
+	MG_BURST
 }
 
 //------------------------------------------------------------------------------------------------
@@ -95,6 +100,21 @@ class CAI_Settings
 	[Attribute("1000", UIWidgets.Slider, "Hunting groups only go after enemy players within this distance (metres).", "100 5000 100")]
 	float m_fHuntRadius;
 
+	[Attribute("1", UIWidgets.CheckBox, "While a group's current waypoint is Search and Destroy it assaults all-out: charges into the waypoint area firing on the move, can't be suppressed, fires at full tempo, commits to contacts without delay and pushes at targets instead of waiting in cover. Hunting groups use this waypoint too.")]
+	bool m_bAssaultOnSearchAndDestroy;
+
+	[Attribute("50", UIWidgets.Slider, "Chance in percent that a soldier carrying a rocket launcher uses it against an infantry target he can see, decided once per target. 0 = vanilla, launchers are kept for vehicles.", "0 100 5")]
+	int m_iLauncherVsInfantryChance;
+
+	[Attribute("150", UIWidgets.Slider, "Rifles which can fire automatic or burst do so against visible targets within this distance (metres), and fire single shots beyond it. 50 = vanilla.", "50 400 10")]
+	float m_fAutoFireRange;
+
+	[Attribute("6", UIWidgets.Slider, "Longest automatic burst of a rifle, in rounds. Each burst is 60 to 100 percent of this. 0 = vanilla, about 1 to 4 rounds.", "0 15 1")]
+	int m_iRifleBurstRounds;
+
+	[Attribute("15", UIWidgets.Slider, "Longest burst of a machine gun or automatic rifle such as the M249 or RPK, in rounds. Each burst is 60 to 100 percent of this. 0 = vanilla, about 2 to 7 rounds.", "0 40 1")]
+	int m_iMachineGunBurstRounds;
+
 	// Values of the unmodified game, used when the mod is disabled
 	static const float VANILLA_AIM_ERROR = 1;
 	static const float VANILLA_NIGHT_AIM_PENALTY = 2;
@@ -104,6 +124,7 @@ class CAI_Settings
 	static const float VANILLA_SUPPRESSION = 1;
 	static const float VANILLA_TARGET_EVAL_INTERVAL = 0.5;
 	static const float VANILLA_DECISION_DELAY = 5;
+	static const float VANILLA_AUTO_FIRE_RANGE = 50;
 
 	//------------------------------------------------------------------------------------------------
 	//! The mod's own tuning. Must match the attribute defaults above.
@@ -123,6 +144,11 @@ class CAI_Settings
 		m_fShareRange = 500;
 		m_fShareInterval = 8;
 		m_bArtillerySupport = true;
+		m_bAssaultOnSearchAndDestroy = true;
+		m_iLauncherVsInfantryChance = 50;
+		m_fAutoFireRange = 150;
+		m_iRifleBurstRounds = 6;
+		m_iMachineGunBurstRounds = 15;
 		m_fArtilleryRange = 2000;
 		m_iArtilleryRounds = 4;
 		m_fArtilleryCooldown = 120;
@@ -150,6 +176,11 @@ class CAI_Settings
 		m_fShareRange = 500;
 		m_fShareInterval = 8;
 		m_bArtillerySupport = false;
+		m_bAssaultOnSearchAndDestroy = false;
+		m_iLauncherVsInfantryChance = 0;
+		m_fAutoFireRange = VANILLA_AUTO_FIRE_RANGE;
+		m_iRifleBurstRounds = 0;
+		m_iMachineGunBurstRounds = 0;
 		m_fArtilleryRange = 2000;
 		m_iArtilleryRounds = 4;
 		m_fArtilleryCooldown = 120;
@@ -199,6 +230,11 @@ class CAI_Settings
 		m_iArtilleryMinTargets = other.m_iArtilleryMinTargets;
 		m_bHunt = other.m_bHunt;
 		m_fHuntRadius = other.m_fHuntRadius;
+		m_bAssaultOnSearchAndDestroy = other.m_bAssaultOnSearchAndDestroy;
+		m_iLauncherVsInfantryChance = other.m_iLauncherVsInfantryChance;
+		m_fAutoFireRange = other.m_fAutoFireRange;
+		m_iRifleBurstRounds = other.m_iRifleBurstRounds;
+		m_iMachineGunBurstRounds = other.m_iMachineGunBurstRounds;
 	}
 
 	//------------------------------------------------------------------------------------------------
@@ -228,6 +264,11 @@ class CAI_Settings
 			case ECAI_Setting.ARTILLERY_MIN_TARGETS:	return m_iArtilleryMinTargets;
 			case ECAI_Setting.HUNT:						return BoolToFloat(m_bHunt);
 			case ECAI_Setting.HUNT_RADIUS:				return m_fHuntRadius;
+			case ECAI_Setting.ASSAULT_SND:				return BoolToFloat(m_bAssaultOnSearchAndDestroy);
+			case ECAI_Setting.LAUNCHER_CHANCE:			return m_iLauncherVsInfantryChance;
+			case ECAI_Setting.AUTO_FIRE_RANGE:			return m_fAutoFireRange;
+			case ECAI_Setting.RIFLE_BURST:				return m_iRifleBurstRounds;
+			case ECAI_Setting.MG_BURST:					return m_iMachineGunBurstRounds;
 		}
 
 		return 0;
@@ -261,6 +302,11 @@ class CAI_Settings
 			case ECAI_Setting.ARTILLERY_MIN_TARGETS:	m_iArtilleryMinTargets = Math.Round(Math.Clamp(value, 1, 10)); break;
 			case ECAI_Setting.HUNT:						m_bHunt = value != 0; break;
 			case ECAI_Setting.HUNT_RADIUS:				m_fHuntRadius = Math.Clamp(value, 100, 5000); break;
+			case ECAI_Setting.ASSAULT_SND:				m_bAssaultOnSearchAndDestroy = value != 0; break;
+			case ECAI_Setting.LAUNCHER_CHANCE:			m_iLauncherVsInfantryChance = Math.Round(Math.Clamp(value, 0, 100)); break;
+			case ECAI_Setting.AUTO_FIRE_RANGE:			m_fAutoFireRange = Math.Clamp(value, 50, 400); break;
+			case ECAI_Setting.RIFLE_BURST:				m_iRifleBurstRounds = Math.Round(Math.Clamp(value, 0, 15)); break;
+			case ECAI_Setting.MG_BURST:					m_iMachineGunBurstRounds = Math.Round(Math.Clamp(value, 0, 40)); break;
 		}
 	}
 

@@ -1,0 +1,17 @@
+MetaFileClass {
+ Name "{6B8D52E0B4F6A123}PrefabsEditable/Auto/AI/Waypoints/E_CAI_AIWaypoint_ClearBuilding.et"
+ Configurations {
+  EntityTemplateResourceClass PC {
+  }
+  EntityTemplateResourceClass XBOX_ONE : PC {
+  }
+  EntityTemplateResourceClass XBOX_SERIES : PC {
+  }
+  EntityTemplateResourceClass PS4 : PC {
+  }
+  EntityTemplateResourceClass PS5 : PC {
+  }
+  EntityTemplateResourceClass HEADLESS : PC {
+  }
+ }
+}

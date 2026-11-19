@@ -82,6 +82,11 @@ class CAI_EditorAttributeHelper
 		manager.SetAttributeEnabled(CAI_ArtilleryMinTargetsEditorAttribute, artilleryOn);
 
 		manager.SetAttributeEnabled(CAI_HuntEditorAttribute, modOn);
+		manager.SetAttributeEnabled(CAI_AssaultSearchAndDestroyEditorAttribute, modOn);
+		manager.SetAttributeEnabled(CAI_LauncherChanceEditorAttribute, modOn);
+		manager.SetAttributeEnabled(CAI_AutoFireRangeEditorAttribute, modOn);
+		manager.SetAttributeEnabled(CAI_RifleBurstEditorAttribute, modOn);
+		manager.SetAttributeEnabled(CAI_MachineGunBurstEditorAttribute, modOn);
 		manager.SetAttributeEnabled(CAI_HuntRadiusEditorAttribute, huntOn);
 	}
 
@@ -409,4 +414,34 @@ class CAI_ArtilleryMinTargetsEditorAttribute : CAI_BaseSliderEditorAttribute
 class CAI_HuntRadiusEditorAttribute : CAI_BaseSliderEditorAttribute
 {
 	override protected ECAI_Setting GetSetting() { return ECAI_Setting.HUNT_RADIUS; }
+}
+
+[BaseContainerProps(), SCR_BaseEditorAttributeCustomTitle()]
+class CAI_AssaultSearchAndDestroyEditorAttribute : CAI_BaseCheckboxEditorAttribute
+{
+	override protected ECAI_Setting GetSetting() { return ECAI_Setting.ASSAULT_SND; }
+}
+
+[BaseContainerProps(), SCR_BaseEditorAttributeCustomTitle()]
+class CAI_LauncherChanceEditorAttribute : CAI_BaseSliderEditorAttribute
+{
+	override protected ECAI_Setting GetSetting() { return ECAI_Setting.LAUNCHER_CHANCE; }
+}
+
+[BaseContainerProps(), SCR_BaseEditorAttributeCustomTitle()]
+class CAI_AutoFireRangeEditorAttribute : CAI_BaseSliderEditorAttribute
+{
+	override protected ECAI_Setting GetSetting() { return ECAI_Setting.AUTO_FIRE_RANGE; }
+}
+
+[BaseContainerProps(), SCR_BaseEditorAttributeCustomTitle()]
+class CAI_RifleBurstEditorAttribute : CAI_BaseSliderEditorAttribute
+{
+	override protected ECAI_Setting GetSetting() { return ECAI_Setting.RIFLE_BURST; }
+}
+
+[BaseContainerProps(), SCR_BaseEditorAttributeCustomTitle()]
+class CAI_MachineGunBurstEditorAttribute : CAI_BaseSliderEditorAttribute
+{
+	override protected ECAI_Setting GetSetting() { return ECAI_Setting.MG_BURST; }
 }

@@ -3,7 +3,7 @@
 //!   Receivers get them the same way they get a heard gunshot, so vanilla's cluster logic sends fireteams to investigate.
 //! - Artillery support: a friendly group crewing static artillery answers a contact report with a fire mission.
 //! - Hunt: a group without orders keeps a Search and Destroy waypoint on the nearest enemy player.
-//! - Banzai charge: only its clean-up is driven from here, see SCR_AIGroup.CAI_StartBanzai.
+//! - Banzai charge and Search and Destroy assault: their start and end are detected from here, see SCR_AIGroup.
 modded class SCR_AIGroupPerception : Managed
 {
 	protected static const ResourceName CAI_HUNT_WAYPOINT_PREFAB = "{B3E7B8DC2BAB8ACC}Prefabs/AI/Waypoints/AIWaypoint_SearchAndDestroy.et";
@@ -37,6 +37,7 @@ modded class SCR_AIGroupPerception : Managed
 			CAI_Register();
 
 		m_Group.CAI_UpdateBanzai();
+		m_Group.CAI_UpdateAssault();
 
 		PerceptionManager pm = GetGame().GetPerceptionManager();
 		if (!pm)

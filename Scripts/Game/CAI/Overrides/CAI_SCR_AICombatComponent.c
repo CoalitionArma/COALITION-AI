@@ -3,7 +3,17 @@ modded class SCR_AICombatComponent : ScriptComponent
 	protected ref CAI_Settings m_CAI_Settings;	//!< Settings this soldier currently uses, see CAI_Refresh
 	protected int m_iCAI_Revision = -1;			//!< CAI_SettingsManager revision m_CAI_Settings was resolved at
 	protected AIGroup m_CAI_Group;				//!< Group m_CAI_Settings was resolved for
-	protected bool m_bCAI_SkillOverridden;		//!< True while our skill override is applied
+	protected bool m_bCAI_Assaulting;			//!< Group is in a Search and Destroy assault, cached in CAI_Apply
+	protected bool m_bCAI_SkillOverridden;
+
+	// Rocket launcher against infantry, see CAI_EvaluateLauncher
+	protected static const float CAI_LAUNCHER_MIN_DISTANCE = 40;		//!< Not closer than this, the shooter would be in the blast
+	protected static const float CAI_LAUNCHER_MAX_DISTANCE = 300;
+	protected static const float CAI_LAUNCHER_DURATION_MS = 20000;	//!< How long after the decision the launcher stays the weapon of choice
+	protected static ref array<EWeaponType> s_aCAI_LauncherWhitelist = {EWeaponType.WT_ROCKETLAUNCHER};
+	protected ref BaseTarget m_CAI_LauncherTarget;	//!< Infantry target the launcher decision below was made for
+	protected bool m_bCAI_UseLauncher;
+	protected float m_fCAI_LauncherEndTime_ms;		//!< World time		//!< True while our skill override is applied
 
 	//------------------------------------------------------------------------------------------------
 	//! Settings this soldier currently uses. Never returns null.
@@ -25,6 +35,42 @@ modded class SCR_AICombatComponent : ScriptComponent
 			return false;
 
 		outPosition = group.CAI_GetBanzaiPosition();
+		return true;
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! \return true while this soldier's group assaults all-out on a Search and Destroy waypoint (SCR_AIGroup.CAI_UpdateAssault)
+	bool CAI_IsAssaulting()
+	{
+		return m_bCAI_Assaulting;
+	}
+
+	//------------------------------------------------------------------------------------------------
+	//! Position this soldier must run straight at while fighting: a banzai charge position, or the centre of the
+	//! Search and Destroy waypoint during an assault. Once within the arrival distance the soldier fights normally.
+	//! \param[out] outSprint true for a banzai charge: sprint and don't aim. False for an assault: run and fire on the move.
+	//! \return false if there is no such position
+	bool CAI_GetChargePosition(out vector outPosition, out float outArrivalDistSq, out bool outSprint)
+	{
+		SCR_AIGroup group = SCR_AIGroup.Cast(m_CAI_Group);
+		if (!group)
+			return false;
+
+		if (group.CAI_IsBanzai())
+		{
+			outPosition = group.CAI_GetBanzaiPosition();
+			outArrivalDistSq = 100;
+			outSprint = true;
+			return true;
+		}
+
+		float radius;
+		if (!group.CAI_GetAssaultArea(outPosition, radius))
+			return false;
+
+		radius = Math.Max(radius, 10);
+		outArrivalDistSq = radius * radius;
+		outSprint = false;
 		return true;
 	}
 
@@ -64,6 +110,9 @@ modded class SCR_AICombatComponent : ScriptComponent
 	//! Pushes settings into the systems that keep their own copy of a value
 	protected void CAI_Apply(SCR_AIThreatSystem threatSystem)
 	{
+		SCR_AIGroup scrGroup = SCR_AIGroup.Cast(m_CAI_Group);
+		m_bCAI_Assaulting = scrGroup && scrGroup.CAI_IsAssaulting();
+
 		// Skill. Only reset it if we were the ones who changed it, scenarios and other mods set skill too.
 		EAISkill skill = m_CAI_Settings.m_eSkillOverride;
 		if (skill != EAISkill.NONE)
@@ -79,9 +128,9 @@ modded class SCR_AICombatComponent : ScriptComponent
 
 		if (threatSystem)
 		{
-			// A soldier in a banzai charge can't be suppressed. Starting and ending a charge invalidates the settings, which gets us here.
+			// A soldier in a banzai charge or an assault can't be suppressed. Their start and end invalidate the settings, which gets us here.
 			vector banzaiPos;
-			if (CAI_GetBanzaiPosition(banzaiPos))
+			if (m_bCAI_Assaulting || CAI_GetBanzaiPosition(banzaiPos))
 				threatSystem.CAI_SetSuppressionScale(0);
 			else
 				threatSystem.CAI_SetSuppressionScale(m_CAI_Settings.m_fSuppressionScale);
@@ -126,16 +175,106 @@ modded class SCR_AICombatComponent : ScriptComponent
 	}
 
 	//------------------------------------------------------------------------------------------------
+	//! Vanilla keeps rocket launchers for vehicles. Here a soldier may decide, once per infantry target, to use his
+	//! launcher on it. While that decision stands, the weapon vanilla just selected is replaced by the launcher.
+	//! \return true if the launcher is now the selected weapon
+	protected bool CAI_EvaluateLauncher()
+	{
+		BaseTarget target = GetCurrentTarget();
+		if (!target || target.GetUnitType() != EAIUnitType.UnitType_Infantry || m_CurrentTurretController)
+		{
+			m_CAI_LauncherTarget = null;
+			m_bCAI_UseLauncher = false;
+			return false;
+		}
+
+		float worldTime_ms = GetGame().GetWorld().GetWorldTime();
+
+		// New target, roll the dice once
+		if (target != m_CAI_LauncherTarget)
+		{
+			m_CAI_LauncherTarget = target;
+			m_bCAI_UseLauncher = Math.RandomInt(0, 100) < m_CAI_Settings.m_iLauncherVsInfantryChance;
+			m_fCAI_LauncherEndTime_ms = worldTime_ms + CAI_LAUNCHER_DURATION_MS;
+		}
+
+		if (!m_bCAI_UseLauncher)
+			return false;
+
+		if (worldTime_ms > m_fCAI_LauncherEndTime_ms)
+		{
+			m_bCAI_UseLauncher = false;
+			return false;
+		}
+
+		// Only at a target he sees, and far enough away. These can change, so the decision is kept.
+		float distance = target.GetDistance();
+		if (distance < CAI_LAUNCHER_MIN_DISTANCE || distance > CAI_LAUNCHER_MAX_DISTANCE || !IsTargetVisible(target))
+			return false;
+
+		// The selector only offers launchers against vehicles, so ask it for a weapon against a vehicle at this distance.
+		// It also picks the rocket to load. No result means no launcher or no rockets left.
+		bool found = m_WeaponTargetSelector.SelectWeaponAgainstUnitTypeAndDistance(EAIUnitType.UnitType_VehicleUnarmored, distance, true, false, s_aCAI_LauncherWhitelist);
+		if (!found)
+			found = m_WeaponTargetSelector.SelectWeaponAgainstUnitTypeAndDistance(EAIUnitType.UnitType_VehicleMedium, distance, true, false, s_aCAI_LauncherWhitelist);
+		if (!found)
+			found = m_WeaponTargetSelector.SelectWeaponAgainstUnitTypeAndDistance(EAIUnitType.UnitType_VehicleHeavy, distance, true, false, s_aCAI_LauncherWhitelist);
+
+		BaseWeaponComponent weapon;
+		BaseMagazineComponent magazine;
+		int muzzleId;
+		if (found)
+			m_WeaponTargetSelector.GetSelectedWeapon(weapon, muzzleId, magazine);
+
+		if (!weapon || weapon.GetWeaponType() != EWeaponType.WT_ROCKETLAUNCHER)
+		{
+			m_bCAI_UseLauncher = false;
+			return false;
+		}
+
+		// Same bookkeeping vanilla does for the weapon it selects
+		if (weapon != m_SelectedWeaponComp || muzzleId != m_iSelectedMuzzle)
+		{
+			array<BaseMuzzleComponent> muzzles = {};
+			weapon.GetMuzzlesList(muzzles);
+			if (muzzles.IsIndexValid(muzzleId))
+				m_SelectedWeaponResource = m_ConfigComponent.GetTreeNameForWeaponType(weapon.GetWeaponType(), muzzles[muzzleId].GetMuzzleType());
+			else
+				m_SelectedWeaponResource = m_ConfigComponent.GetTreeNameForWeaponType(weapon.GetWeaponType(), 0);
+		}
+
+		m_SelectedWeaponComp = weapon;
+		m_iSelectedMuzzle = muzzleId;
+		m_SelectedMagazineComp = magazine;
+
+		m_WeaponTargetSelector.GetSelectedWeaponProperties(m_fSelectedWeaponMinDist, m_fSelectedWeaponMaxDist, m_bSelectedWeaponDirectDamage);
+		m_fSelectedWeaponMinDist = Math.Max(m_fSelectedWeaponMinDist, CAI_LAUNCHER_MIN_DISTANCE);
+
+		return true;
+	}
+
+	//------------------------------------------------------------------------------------------------
 	//! Vanilla re-evaluates target and weapon every 0.5 s. Pull the next evaluation closer if settings ask for it.
 	override void EvaluateWeaponAndTarget(out bool outWeaponEvent, out bool outSelectedTargetChanged,
 		out BaseTarget outPrevTarget, out BaseTarget outCurrentTarget,
 		out bool outRetreatTargetChanged, out bool outCompartmentChanged)
 	{
+		// What we left selected last time, which may be the launcher. Vanilla is about to select again.
+		BaseWeaponComponent prevWeapon = m_SelectedWeaponComp;
+		BaseMagazineComponent prevMagazine = m_SelectedMagazineComp;
+		int prevMuzzle = m_iSelectedMuzzle;
+		float nextEvaluationBefore_ms = m_fNextWeaponTargetEvaluation_ms;
+
 		super.EvaluateWeaponAndTarget(outWeaponEvent, outSelectedTargetChanged, outPrevTarget, outCurrentTarget, outRetreatTargetChanged, outCompartmentChanged);
 
 		if (!m_CAI_Settings)
 			return;
 
+		// Vanilla only evaluates every 0.5 s and returns early otherwise, in which case there is nothing to adjust
+		if (m_fNextWeaponTargetEvaluation_ms != nextEvaluationBefore_ms && CAI_EvaluateLauncher())
+		{
+			outWeaponEvent = m_SelectedWeaponComp != prevWeapon || m_iSelectedMuzzle != prevMuzzle || m_SelectedMagazineComp != prevMagazine;
+		}
 		float interval_ms = 1000 * m_CAI_Settings.m_fTargetEvalInterval;
 		if (interval_ms >= WEAPON_TARGET_UPDATE_PERIOD_MS)
 			return;

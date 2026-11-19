@@ -1,0 +1,13 @@
+SCR_AIWaypoint : "{FFF9518F73279473}PrefabsEditable/Auto/AI/Waypoints/E_AIWaypoint_Move.et" {
+ ID "663CBEF736DEBDE0"
+ components {
+  SCR_EditableWaypointComponent "{56424E1FD75DDA6D}" {
+   m_UIInfo SCR_EditableEntityUIInfo "{5298E609432D192D}" {
+    Name "Banzai charge"
+    Icon "{720670EC43613579}UI/Textures/Editor/EditableEntities/Waypoints/EditableEntity_Waypoint_Move_Forced.edds"
+   }
+  }
+ }
+ Title "Banzai charge waypoint"
+ CompletionRadius 10
+}

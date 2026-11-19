@@ -9,6 +9,11 @@ modded class SCR_AIGroupTargetClusterProcessor : Managed
 		if (s && s.m_eState == EAITargetClusterState.NONE && m_Utility && m_Utility.m_Owner)
 		{
 			float delay_s = m_Utility.m_Owner.CAI_GetSettings().m_fDecisionDelay;
+
+			// Search and Destroy assault: commit to contacts at once
+			if (m_Utility.m_Owner.CAI_IsAssaulting())
+				delay_s = 0;
+
 			if (delay_s != CAI_Settings.VANILLA_DECISION_DELAY)
 				deltaTime_ms *= CAI_Settings.VANILLA_DECISION_DELAY / Math.Max(delay_s, 0.05);
 		}

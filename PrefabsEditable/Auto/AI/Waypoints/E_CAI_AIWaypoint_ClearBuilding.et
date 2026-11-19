@@ -1,0 +1,23 @@
+CAI_ClearBuildingWaypoint : "{49CED34BBCD060F0}Prefabs/AI/Waypoints/AIWaypoint_Base.et" {
+ ID "663CBEF736DEBDE0"
+ components {
+  SCR_EditableEntityVisibilityChildComponent "{6B7298D3C9FED544}" : "{CA7D13FC9D385E8F}Prefabs/Editor/Components/Waypoint_SCR_EditableEntityVisibilityChildComponent.ct" {
+  }
+  SCR_EditableWaypointComponent "{6BCA92A7DC1767B9}" : "{89CF6086B34A8800}Prefabs/Editor/Components/Waypoint_SCR_EditableEntityComponent.ct" {
+   m_UIInfo SCR_EditableEntityUIInfo "{5298E609432D192D}" {
+    Name "Clear building"
+    Description "The group clears the building nearest to this waypoint, room by room."
+    Icon "{50AF41A6BB0265BD}UI/Textures/Editor/EditableEntities/Waypoints/EditableEntity_Waypoint_Custom.edds"
+    m_aAutoLabels {
+     7 124
+    }
+   }
+  }
+  SCR_WaypointAreaMeshComponent "{6B0187AFBC4C0B3E}" : "{3CE012874EA1DC23}Prefabs/Editor/Components/Waypoint_SCR_WaypointAreaMeshComponent.ct" {
+  }
+  RplComponent "{6BC14F74F05D0D9A}" : "{B193E926C1935A4C}Prefabs/Editor/Components/Default_RplComponent.ct" {
+  }
+ }
+ Description "Clear the building nearest to this position"
+ CompletionRadius 10
+}

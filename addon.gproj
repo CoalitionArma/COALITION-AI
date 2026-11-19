@@ -5,4 +5,140 @@ GameProject {
  Dependencies {
   "58D0FB3206B6F859"
  }
+ Configurations {
+  GameProjectConfig PC {
+   NavmeshManager NavmeshManager "{B462A58A882A1448}" {
+    ProjectSettings {
+     NavmeshProjectConfig Soldiers {
+      PhysicsInteractionLayer 0x200000 0
+      DefaultWalkableFlags 0x3e 0
+      AreaTypeForTerrain "OffRoad"
+      FlagTypes {
+       NavmeshAreaFlagConfig JumpOver {
+       }
+       NavmeshAreaFlagConfig Swim {
+       }
+       NavmeshAreaFlagConfig Climb {
+       }
+       NavmeshAreaFlagConfig Open {
+       }
+       NavmeshAreaFlagConfig Avert {
+       }
+      }
+      AreaTypes {
+       NavmeshAreaTypeConfig Fence {
+        AreaFlags 0x4 0x2
+        AreaCost 25
+       }
+       NavmeshAreaTypeConfig Avoid {
+        AreaCost 50
+       }
+       NavmeshAreaTypeConfig Roof {
+        AreaFlags 0x42 0
+        AreaCost 20
+       }
+       NavmeshAreaTypeConfig Water {
+        AreaFlags 0xa 0
+        AreaCost 50
+       }
+       NavmeshAreaTypeConfig Asphalt {
+        AreaCost 3.5
+       }
+       NavmeshAreaTypeConfig OffRoad {
+        AreaCost 3
+       }
+       NavmeshAreaTypeConfig DirtRoad {
+        AreaCost 3.2
+       }
+       NavmeshAreaTypeConfig Ladder {
+        AreaFlags 0x12 0
+        AreaCost 20
+       }
+       NavmeshAreaTypeConfig Door {
+        AreaFlags 0x22 0
+        AreaCost 10
+       }
+      }
+     }
+     NavmeshProjectConfig BTRlike {
+      PhysicsInteractionLayer 0xa00000 0
+      ResponseIndexToAreaTypeConversion {
+       ResponseIndexToAreaTypeConversionConfig "{62CED692F1A6E7FA}" {
+        ResponseIndex "TinyDestructible"
+        AreaType 6
+       }
+       ResponseIndexToAreaTypeConversionConfig "{62CED690D51E76CF}" {
+        ResponseIndex "SmallDestructible"
+        AreaType 6
+       }
+       ResponseIndexToAreaTypeConversionConfig "{62F276B19BCB8017}" {
+        ResponseIndex "MediumDestructible"
+        AreaType 6
+       }
+       ResponseIndexToAreaTypeConversionConfig "{62CED690D570E85F}" {
+        ResponseIndex "LargeDestructible"
+        AreaType 7
+       }
+       ResponseIndexToAreaTypeConversionConfig "{62CED690D5686C06}" {
+        ResponseIndex "HugeDestructible"
+        AreaType 7
+       }
+      }
+      AreaTypeForTerrain "OffRoad"
+      FlagTypes {
+       NavmeshAreaFlagConfig Destructible {
+       }
+       NavmeshAreaFlagConfig HardDestructible {
+       }
+       NavmeshAreaFlagConfig Swim {
+       }
+      }
+      AreaTypes {
+       NavmeshAreaTypeConfig Door {
+        AreaCost 50
+       }
+       NavmeshAreaTypeConfig Water {
+        AreaFlags 0x12 0
+        AreaCost 100
+       }
+       NavmeshAreaTypeConfig Asphalt {
+       }
+       NavmeshAreaTypeConfig OffRoad {
+        AreaCost 1.2
+       }
+       NavmeshAreaTypeConfig DirtRoad {
+        AreaCost 1.1
+       }
+       NavmeshAreaTypeConfig Destructible {
+        AreaFlags 0x6 0
+        AreaCost 20
+       }
+       NavmeshAreaTypeConfig HardDestructible {
+        AreaFlags 0xa 0
+        AreaCost 80
+       }
+      }
+     }
+     NavmeshProjectConfig LowRes {
+      PhysicsInteractionLayer 0xa00000 0
+      AreaTypes {
+       NavmeshAreaTypeConfig Water {
+        AreaCost 50
+       }
+      }
+     }
+    }
+   }
+  }
+  GameProjectConfig XBOX_ONE {
+  }
+  GameProjectConfig XBOX_SERIES {
+  }
+  GameProjectConfig PS4 {
+  }
+  GameProjectConfig PS5 {
+  }
+  GameProjectConfig HEADLESS {
+  }
+ }
 }
