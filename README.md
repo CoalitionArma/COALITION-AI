@@ -45,7 +45,7 @@ All three are placed like any other waypoint: select a group, pick the order fro
 The command bar is widened from 9 to 13 slots so the vanilla orders and the three new ones fit on one page.
 
 ### Movement
-- **Roads**: soldiers on foot no longer treat roads as much cheaper than open ground, so they head for a waypoint directly instead of running down the nearest road. Vehicles are not affected.
+- **Roads**: for soldiers on foot, roads now cost several times more than open ground, where vanilla makes them the cheapest surface. They head for a waypoint across country and only use or cross a road when there is no reasonable way around. Vehicles are not affected.
 
 ## Settings
 

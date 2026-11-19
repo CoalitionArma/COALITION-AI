@@ -42,13 +42,13 @@ GameProject {
         AreaCost 50
        }
        NavmeshAreaTypeConfig Asphalt {
-        AreaCost 3.5
+        AreaCost 12
        }
        NavmeshAreaTypeConfig OffRoad {
         AreaCost 3
        }
        NavmeshAreaTypeConfig DirtRoad {
-        AreaCost 3.2
+        AreaCost 10
        }
        NavmeshAreaTypeConfig Ladder {
         AreaFlags 0x12 0

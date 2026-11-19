@@ -41,7 +41,10 @@ class CAI_GarrisonWaypointState : CAI_ClearBuildingWaypointState
 
 		int agentCount = m_aGarrisonAgents.Count();
 		if (agentCount == 0)
+		{
+			PrintFormat("%1%2: no soldiers on foot", LOG_PREFIX, Type());
 			return false;
+		}
 
 		// Spots as far from each other as possible: start with the one nearest to the group, then keep adding the
 		// position which is furthest from all spots chosen so far.
@@ -90,6 +93,8 @@ class CAI_GarrisonWaypointState : CAI_ClearBuildingWaypointState
 			m_aGarrisonBehaviors.Insert(null);
 			SendToSpot(i);
 		}
+
+		PrintFormat("%1%2: %3 soldiers sent to %4 spots", LOG_PREFIX, Type(), agentCount, spots.Count());
 
 		GetGame().GetCallqueue().CallLater(HoldStep, HOLD_STEP_MS, true);
 		return true;

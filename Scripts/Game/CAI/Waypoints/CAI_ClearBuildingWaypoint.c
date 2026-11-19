@@ -26,14 +26,17 @@ class CAI_ClearBuildingWaypointState : SCR_AIWaypointState
 {
 	protected static const float BUILDING_SEARCH_RADIUS = 25;	//!< Metres around the waypoint in which the building is looked for
 	protected static const float GRID_STEP = 3.5;				//!< Horizontal distance between sample points
-	protected static const float FLOOR_STEP = 2.8;				//!< Vertical distance between sample layers, about one storey
-	protected static const int MAX_SAMPLES = 400;				//!< The grid is made coarser for buildings which would need more
-	protected static const float NAVMESH_SNAP_RADIUS = 1.5;		//!< How far a sample may be from walkable floor
+	protected static const float FLOOR_STEP = 2.8;				//!< Height of one storey, used to order positions by storey
+	protected static const float LAYER_STEP = 1.4;				//!< Vertical distance between sample layers. Half a storey, so no floor falls between two layers.
+	protected static const int MAX_SAMPLES = 600;				//!< The grid is made coarser for buildings which would need more
+	protected static const float NAVMESH_SNAP_RADIUS = 2;		//!< How far a sample may be from walkable floor
+	protected static const float MAX_SNAP_HEIGHT = 1.1;			//!< A point snapped further up or down than this belongs to another layer
 	protected static const float MIN_SPACING_SQ = 6.25;			//!< Points closer than this (2.5 m, squared) count as the same spot
 	protected static const int MAX_POSITIONS = 48;
-	protected static const int SAMPLES_PER_STEP = 6;
+	protected static const int SAMPLES_PER_STEP = 10;
 	protected static const int QUERY_STEP_MS = 50;
-	protected static const int MAX_TILE_WAITS = 100;			//!< Query steps spent waiting for navmesh tiles before giving up on a sample
+	protected static const int MAX_TILE_WAITS = 60;				//!< Query steps (3 s) spent in total waiting for navmesh tiles, after that samples are tested regardless
+	protected static const string LOG_PREFIX = "[COALITION AI] ";
 	protected static const int UPDATE_STEP_MS = 1000;
 	protected static const float POSITION_RADIUS = 2;			//!< A soldier has reached a point within this distance
 	protected static const float LOOK_DURATION_S = 3;			//!< Time a soldier looks around at each point
@@ -52,6 +55,13 @@ class CAI_ClearBuildingWaypointState : SCR_AIWaypointState
 	protected ref array<vector> m_aSamples = {};
 	protected int m_iNextSample;
 	protected int m_iTileWaits;
+
+	// Why samples were rejected, printed to the log once sampling is done
+	protected int m_iRejectedNoNavmesh;
+	protected int m_iRejectedOtherLayer;
+	protected int m_iRejectedDuplicate;
+	protected int m_iRejectedFloor;
+	protected int m_iRejectedNoRoof;
 	protected ref array<vector> m_aPositions = {};
 
 	// Clearing. The three arrays are parallel, one entry per soldier.
@@ -77,11 +87,20 @@ class CAI_ClearBuildingWaypointState : SCR_AIWaypointState
 		FindBuilding();
 		if (!m_Building || !m_Navmesh)
 		{
+			PrintFormat("%1%2: no building within %3 m of the waypoint (navmesh found: %4)", LOG_PREFIX, Type(), BUILDING_SEARCH_RADIUS, m_Navmesh != null);
 			Finish();
 			return;
 		}
 
 		CreateSamples();
+
+		vector boundsMin, boundsMax;
+		m_Building.GetBounds(boundsMin, boundsMax);
+		string prefabName;
+		if (m_Building.GetPrefabData())
+			prefabName = m_Building.GetPrefabData().GetPrefabName();
+		PrintFormat("%1%2: building %3, size %4, %5 samples", LOG_PREFIX, Type(), prefabName, boundsMax - boundsMin, m_aSamples.Count());
+
 		GetGame().GetCallqueue().CallLater(QueryStep, QUERY_STEP_MS, true);
 	}
 
@@ -149,7 +168,7 @@ class CAI_ClearBuildingWaypointState : SCR_AIWaypointState
 		m_vSearchPos = m_Waypoint.GetOrigin();
 		m_Building = null;
 		m_fBuildingDistSq = float.MAX;
-		GetGame().GetWorld().QueryEntitiesBySphere(m_vSearchPos, BUILDING_SEARCH_RADIUS, QueryBuilding, null, EQueryEntitiesFlags.STATIC);
+		GetGame().GetWorld().QueryEntitiesBySphere(m_vSearchPos, BUILDING_SEARCH_RADIUS, QueryBuilding, null, EQueryEntitiesFlags.ALL);
 	}
 
 	//------------------------------------------------------------------------------------------------
@@ -194,7 +213,7 @@ class CAI_ClearBuildingWaypointState : SCR_AIWaypointState
 		{
 			countX = Math.Ceil((maxs[0] - mins[0]) / step);
 			countZ = Math.Ceil((maxs[2] - mins[2]) / step);
-			countY = Math.Ceil((maxs[1] - mins[1]) / FLOOR_STEP);
+			countY = Math.Ceil((maxs[1] - mins[1]) / LAYER_STEP);
 			countX = Math.Max(countX, 1);
 			countY = Math.Max(countY, 1);
 			countZ = Math.Max(countZ, 1);
@@ -208,7 +227,7 @@ class CAI_ClearBuildingWaypointState : SCR_AIWaypointState
 		vector local;
 		for (int y = 0; y < countY; y++)
 		{
-			local[1] = mins[1] + 0.5 + y * FLOOR_STEP;
+			local[1] = mins[1] + 0.5 + y * LAYER_STEP;
 			for (int x = 0; x < countX; x++)
 			{
 				local[0] = mins[0] + (x + 0.5) * step;
@@ -228,7 +247,7 @@ class CAI_ClearBuildingWaypointState : SCR_AIWaypointState
 		if (!m_bRunning)
 			return;
 
-		if (!m_Building)
+		if (!m_Building || GetGame().GetWorld().GetWorldTime() > m_fEndTime_ms)
 		{
 			Finish();
 			return;
@@ -241,7 +260,8 @@ class CAI_ClearBuildingWaypointState : SCR_AIWaypointState
 
 			vector sample = m_aSamples[m_iNextSample];
 
-			// Navmesh tiles are streamed, a tile which is not there yet is requested and the sample retried next step
+			// Navmesh tiles are streamed, a tile which is not there yet is requested and the sample retried next step.
+			// The waiting has one budget for the whole building, so a tile which never reports as loaded can't stall it.
 			if (m_iTileWaits < MAX_TILE_WAITS && !m_Navmesh.IsTileLoaded(sample))
 			{
 				if (!m_Navmesh.IsTileRequested(sample))
@@ -251,7 +271,6 @@ class CAI_ClearBuildingWaypointState : SCR_AIWaypointState
 				return;
 			}
 
-			m_iTileWaits = 0;
 			m_iNextSample++;
 
 			vector position;
@@ -264,10 +283,18 @@ class CAI_ClearBuildingWaypointState : SCR_AIWaypointState
 
 		// Sampling is done
 		GetGame().GetCallqueue().Remove(QueryStep);
+
+		PrintFormat("%1%2: %3 positions from %4 samples", LOG_PREFIX, Type(), m_aPositions.Count(), m_aSamples.Count());
+		PrintFormat("%1rejected: %2 not on navmesh, %3 other layer, %4 too close to another, %5 floor of something else, %6 no roof. Tile waits: %7", LOG_PREFIX,
+			m_iRejectedNoNavmesh, m_iRejectedOtherLayer, m_iRejectedDuplicate, m_iRejectedFloor, m_iRejectedNoRoof, m_iTileWaits);
+
 		m_aSamples.Clear();
 
 		if (m_aPositions.IsEmpty() || !StartWork())
+		{
+			PrintFormat("%1%2: nothing to do, completing the waypoint", LOG_PREFIX, Type());
 			Finish();
+		}
 	}
 
 	//------------------------------------------------------------------------------------------------
@@ -288,34 +315,49 @@ class CAI_ClearBuildingWaypointState : SCR_AIWaypointState
 	{
 		vector position;
 		if (!m_Navmesh.GetReachablePoint(sample, NAVMESH_SNAP_RADIUS, position))
+		{
+			m_iRejectedNoNavmesh++;
 			return false;
+		}
 
-		// Snapped to another storey, which has its own samples
-		if (Math.AbsFloat(position[1] - sample[1]) > FLOOR_STEP * 0.6)
+		// Snapped to the floor above or below, which has its own samples
+		if (Math.AbsFloat(position[1] - sample[1]) > MAX_SNAP_HEIGHT)
+		{
+			m_iRejectedOtherLayer++;
 			return false;
+		}
 
 		foreach (vector other : m_aPositions)
 		{
 			if (vector.DistanceSq(other, position) < MIN_SPACING_SQ)
+			{
+				m_iRejectedDuplicate++;
 				return false;
+			}
 		}
 
 		IEntity buildingRoot = m_Building.GetRootParent();
 		BaseWorld world = GetGame().GetWorld();
 
-		// The floor under the point must belong to the building
+		// Something of this building must be above the point, otherwise it is on a roof, a balcony or outside
 		TraceParam trace = new TraceParam();
 		trace.Flags = TraceFlags.ENTS;
 		trace.Start = position + 1.5 * vector.Up;
-		trace.End = position - vector.Up;
-		if (world.TraceMove(trace, null) >= 0.999 || !trace.TraceEnt || trace.TraceEnt.GetRootParent() != buildingRoot)
-			return false;
-
-		// And so must whatever is above it, otherwise the point is on a roof, balcony or porch
-		trace.TraceEnt = null;
 		trace.End = position + 20 * vector.Up;
 		if (world.TraceMove(trace, null) >= 0.999 || !trace.TraceEnt || trace.TraceEnt.GetRootParent() != buildingRoot)
+		{
+			m_iRejectedNoRoof++;
 			return false;
+		}
+
+		// The floor under the point must not belong to something else. No entity at all is fine: some ground floors are bare terrain.
+		trace.TraceEnt = null;
+		trace.End = position - vector.Up;
+		if (world.TraceMove(trace, null) < 0.999 && trace.TraceEnt && trace.TraceEnt.GetRootParent() != buildingRoot)
+		{
+			m_iRejectedFloor++;
+			return false;
+		}
 
 		outPosition = position;
 		return true;
@@ -344,6 +386,7 @@ class CAI_ClearBuildingWaypointState : SCR_AIWaypointState
 		}
 
 		int agentCount = m_aAgents.Count();
+		PrintFormat("%1%2: %3 soldiers on foot", LOG_PREFIX, Type(), agentCount);
 		if (agentCount == 0)
 			return false;
 
